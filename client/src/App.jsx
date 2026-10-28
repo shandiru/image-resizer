@@ -1,39 +1,29 @@
 import React, { useState, useCallback } from 'react';
-import { Wand2, Zap, Layers } from 'lucide-react';
+import { Aperture, ShieldCheck, SlidersHorizontal, Sparkles, ArrowRight, Image as ImageIcon } from 'lucide-react';
 import DropZone from './components/DropZone';
 import ImageList from './components/ImageList';
 import ProgressBar from './components/ProgressBar';
 import DownloadButton from './components/DownloadButton';
-import { batchProcess } from './lib/imageProcessor';
+import { batchProcess, COMPRESSION_QUALITY } from './lib/imageProcessor';
 
 function App() {
   const [files, setFiles] = useState([]);
+  const [quality, setQuality] = useState(COMPRESSION_QUALITY);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, fileName: null });
 
   const handleProcessImages = async () => {
-    const pendingFiles = files.filter(f => f.status === 'pending');
-    if (pendingFiles.length === 0) return;
-
+    const pendingFiles = files.filter(file => file.status === 'pending');
+    if (!pendingFiles.length || isProcessing) return;
     setIsProcessing(true);
     setProgress({ current: 0, total: pendingFiles.length, fileName: null });
-
     try {
-      const processed = await batchProcess(
-        pendingFiles.map(f => f.file),
-        (current, total) => {
-          setProgress({ current, total });
-        }
-      );
-
-      // Merge processed results with existing files
+      const processed = await batchProcess(pendingFiles.map(file => file.file), (current, total) => setProgress({ current, total }), quality);
+      let resultIndex = 0;
       setFiles(prev => prev.map(file => {
         if (file.status !== 'pending') return file;
-        const result = processed.find(r => r.originalName === file.originalName);
-        if (result) {
-          return { ...file, ...result, status: result.error ? 'error' : 'done' };
-        }
-        return file;
+        const result = processed[resultIndex++];
+        return result ? { ...file, ...result, status: result.error ? 'error' : 'done' } : file;
       }));
     } catch (error) {
       console.error('Processing failed:', error);
@@ -44,123 +34,62 @@ function App() {
   };
 
   const handleReset = useCallback(() => {
+    files.forEach(file => { if (file.preview) URL.revokeObjectURL(file.preview); });
     setFiles([]);
     setProgress({ current: 0, total: 0, fileName: null });
-  }, []);
+  }, [files]);
 
-  const hasPendingFiles = files.some(f => f.status === 'pending');
-  const hasProcessedFiles = files.some(f => f.status === 'done');
+  const handleRemove = useCallback((id) => {
+    const removed = files.find(file => file.id === id);
+    if (removed?.preview) URL.revokeObjectURL(removed.preview);
+    setFiles(prev => prev.filter(file => file.id !== id));
+  }, [files]);
+
+  const pendingCount = files.filter(file => file.status === 'pending').length;
+  const hasProcessedFiles = files.some(file => file.status === 'done');
 
   return (
-    <div className="min-h-screen bg-dark-950">
-      {/* Header */}
-      <header className="border-b border-dark-800">
-        <div className="max-w-6xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent-600 rounded-xl">
-                <Layers className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-dark-100">ImageOptimizer</h1>
-                <p className="text-sm text-dark-400">Client-side WebP Converter</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-2 text-sm text-dark-400">
-                <Zap className="w-4 h-4 text-accent-500" />
-                <span>100% Client-side</span>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 text-sm text-dark-400">
-                <Wand2 className="w-4 h-4 text-accent-500" />
-                <span>Best Quality</span>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-stone-50 text-stone-900">
+      <header className="border-b border-stone-200 bg-white">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-[76px] flex items-center justify-between">
+          <a href="#top" className="flex items-center gap-3" aria-label="Pixel Press home">
+            <div className="w-10 h-10 rounded-xl bg-emerald-700 flex items-center justify-center"><Aperture className="w-5 h-5 text-white" /></div>
+            <div><h1 className="font-bold tracking-tight">Pixel Press</h1><p className="text-xs text-stone-500">Image optimizer</p></div>
+          </a>
+          <div className="hidden sm:flex items-center gap-2 text-sm text-stone-600"><ShieldCheck className="w-4 h-4 text-emerald-700" /> Images stay on your device</div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="space-y-6">
-          {/* Drop Zone */}
+      <main id="top" className="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
+        <div className="max-w-3xl mb-9">
+          <p className="text-sm font-semibold tracking-wide uppercase text-emerald-800 mb-3">Fast, private image conversion</p>
+          <h2 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.08]">Smaller images.<br className="hidden sm:block" /> Same sharp details.</h2>
+          <p className="mt-4 text-lg text-stone-600 max-w-2xl">Convert a batch of photos to WebP in your browser. Choose the quality that works for your project.</p>
+        </div>
+
+        <section className="bg-white border border-stone-200 rounded-2xl p-5 sm:p-8 shadow-sm space-y-6" aria-label="Image conversion">
           <DropZone files={files} setFiles={setFiles} onProcessing={isProcessing} />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 border-t border-stone-100 pt-5">
+            <div className="flex items-center gap-2 text-sm font-medium text-stone-700"><SlidersHorizontal className="w-4 h-4 text-emerald-800" /> Output quality</div>
+            <input aria-label="Output quality" type="range" min="0.5" max="1" step="0.01" value={quality} onChange={event => setQuality(Number(event.target.value))} className="quality-slider flex-1" />
+            <span className="text-sm font-semibold tabular-nums text-stone-800 w-12">{Math.round(quality * 100)}%</span>
+            <span className="text-xs text-stone-500">Higher quality = larger files</span>
+          </div>
+          {pendingCount > 0 && <button onClick={handleProcessImages} disabled={isProcessing} className="flex items-center justify-center gap-2 w-full py-3.5 px-6 bg-emerald-800 hover:bg-emerald-900 disabled:bg-stone-400 text-white font-semibold rounded-xl transition-colors">
+            {isProcessing ? <><Sparkles className="w-5 h-5 animate-pulse" /> Converting images…</> : <>Convert {pendingCount} image{pendingCount !== 1 ? 's' : ''} to WebP <ArrowRight className="w-5 h-5" /></>}
+          </button>}
+          <ProgressBar current={progress.current} total={progress.total} isActive={isProcessing} />
+          <ImageList files={files} onRemove={handleRemove} isProcessing={isProcessing} />
+          {hasProcessedFiles && <DownloadButton files={files} onReset={handleReset} />}
+        </section>
 
-          {/* Process Button */}
-          {hasPendingFiles && (
-            <button
-              onClick={handleProcessImages}
-              disabled={isProcessing}
-              className="w-full py-3 px-6 bg-accent-600 hover:bg-accent-500 disabled:bg-dark-600 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-accent-500/20"
-            >
-              {isProcessing ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Zap className="w-5 h-5 animate-pulse" />
-                  Processing...
-                </span>
-              ) : (
-                <span className="flex items-center justify-center gap-2">
-                  <Wand2 className="w-5 h-5" />
-                  Convert {hasPendingFiles ? files.filter(f => f.status === 'pending').length : ''} Images to WebP
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Progress Bar */}
-          <ProgressBar
-            current={progress.current}
-            total={progress.total}
-            isActive={isProcessing}
-          />
-
-          {/* Image List */}
-          <ImageList
-            files={files}
-            onRemove={(id) => setFiles(prev => prev.filter(f => f.id !== id))}
-            isProcessing={isProcessing}
-          />
-
-          {/* Download Button */}
-          {hasProcessedFiles && (
-            <DownloadButton files={files} onReset={handleReset} />
-          )}
-
-          {/* Empty State Info */}
-          {files.length === 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-              <div className="card p-6 text-center">
-                <div className="w-12 h-12 mx-auto mb-3 bg-accent-500/20 rounded-xl flex items-center justify-center">
-                  <Layers className="w-6 h-6 text-accent-500" />
-                </div>
-                <h3 className="font-semibold text-dark-200 mb-1">WebP Format</h3>
-                <p className="text-sm text-dark-400">Modern image format with superior compression</p>
-              </div>
-              <div className="card p-6 text-center">
-                <div className="w-12 h-12 mx-auto mb-3 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-blue-500" />
-                </div>
-                <h3 className="font-semibold text-dark-200 mb-1">Lightning Fast</h3>
-                <p className="text-sm text-dark-400">All processing happens in your browser</p>
-              </div>
-              <div className="card p-6 text-center">
-                <div className="w-12 h-12 mx-auto mb-3 bg-green-500/20 rounded-xl flex items-center justify-center">
-                  <Wand2 className="w-6 h-6 text-green-500" />
-                </div>
-                <h3 className="font-semibold text-dark-200 mb-1">Batch Download</h3>
-                <p className="text-sm text-dark-400">Get all images in a single ZIP file</p>
-              </div>
-            </div>
-          )}
-        </div>
+        {files.length === 0 && <div className="grid sm:grid-cols-3 gap-5 mt-8">
+          <article className="p-5"><ShieldCheck className="w-5 h-5 text-emerald-800 mb-3" /><h3 className="font-semibold mb-1">Private by design</h3><p className="text-sm text-stone-600">Your photos are converted locally and never uploaded.</p></article>
+          <article className="p-5"><SlidersHorizontal className="w-5 h-5 text-emerald-800 mb-3" /><h3 className="font-semibold mb-1">Your quality settings</h3><p className="text-sm text-stone-600">Tune compression to balance crisp details and smaller files.</p></article>
+          <article className="p-5"><ImageIcon className="w-5 h-5 text-emerald-800 mb-3" /><h3 className="font-semibold mb-1">Ready in one batch</h3><p className="text-sm text-stone-600">Convert up to 40 images, then download them together.</p></article>
+        </div>}
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-dark-800 mt-12">
-        <div className="max-w-6xl mx-auto px-6 py-6 text-center text-sm text-dark-500">
-          Built with React + Tailwind CSS • All processing happens locally in your browser
-        </div>
-      </footer>
+      <footer className="max-w-6xl mx-auto px-5 sm:px-8 py-6 text-sm text-stone-500">Made for the web. Your files stay on this device.</footer>
     </div>
   );
 }

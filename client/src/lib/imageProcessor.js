@@ -3,15 +3,13 @@
  * Uses Canvas API for high-performance image compression
  */
 
-export const COMPRESSION_QUALITY = 0.8; // 80% quality - best balance
+export const COMPRESSION_QUALITY = 0.82;
 
-export async function processImage(file, onProgress) {
+export async function processImage(file, quality = COMPRESSION_QUALITY) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
+    const imageUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = async () => {
         try {
           // Create canvas with image dimensions
           const canvas = document.createElement('canvas');
@@ -35,10 +33,12 @@ export async function processImage(file, onProgress) {
           ctx.drawImage(img, 0, 0, width, height);
 
           // Convert to WebP with specified quality
-          const webpDataUrl = canvas.toDataURL('image/webp', COMPRESSION_QUALITY);
-
-          // Convert base64 to blob
-          const blob = dataURLToBlob(webpDataUrl);
+          const blob = await new Promise((resolveBlob, rejectBlob) => {
+            canvas.toBlob((result) => {
+              if (result) resolveBlob(result);
+              else rejectBlob(new Error('This browser could not encode the image'));
+            }, 'image/webp', quality);
+          });
 
           // Calculate savings
           const originalSize = file.size;
@@ -53,43 +53,29 @@ export async function processImage(file, onProgress) {
             blob,
             webpName: file.name.replace(/\.[^/.]+$/, '') + '.webp',
             dimensions: { width, height },
-            preview: webpDataUrl
+            preview: URL.createObjectURL(blob)
           });
         } catch (error) {
           reject(error);
+        } finally {
+          URL.revokeObjectURL(imageUrl);
         }
-      };
-
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = e.target.result;
     };
-
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      reject(new Error('Could not decode this image'));
+    };
+    img.src = imageUrl;
   });
 }
 
-function dataURLToBlob(dataURL) {
-  const arr = dataURL.split(',');
-  const mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-
-  return new Blob([u8arr], { type: mime });
-}
-
-export async function batchProcess(files, onProgress) {
+export async function batchProcess(files, onProgress, quality = COMPRESSION_QUALITY) {
   const results = [];
   const total = files.length;
 
   for (let i = 0; i < files.length; i++) {
     try {
-      const result = await processImage(files[i]);
+      const result = await processImage(files[i], quality);
       results.push(result);
     } catch (error) {
       console.error(`Error processing ${files[i].name}:`, error);
