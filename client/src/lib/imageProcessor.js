@@ -11,6 +11,9 @@ export async function processImage(file, quality = COMPRESSION_QUALITY) {
     const img = new Image();
     img.onload = async () => {
         try {
+          if (img.width * img.height > 40000000) {
+            throw new Error('Image dimensions exceed the 40 megapixel limit');
+          }
           // Create canvas with image dimensions
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
@@ -39,6 +42,9 @@ export async function processImage(file, quality = COMPRESSION_QUALITY) {
               else rejectBlob(new Error('This browser could not encode the image'));
             }, 'image/webp', quality);
           });
+          if (blob.type !== 'image/webp') {
+            throw new Error('WebP export is not supported by this browser');
+          }
 
           // Calculate savings
           const originalSize = file.size;
@@ -51,7 +57,7 @@ export async function processImage(file, quality = COMPRESSION_QUALITY) {
             optimizedSize,
             savedPercentage: parseFloat(savedPercentage),
             blob,
-            webpName: file.name.replace(/\.[^/.]+$/, '') + '.webp',
+            webpName: `${file.name.split(/[\\/]/).pop().replace(/\.[^/.]+$/, '').replace(/[\x00-\x1f<>:"|?*]/g, '_').slice(0, 100) || 'image'}.webp`,
             dimensions: { width, height },
             preview: URL.createObjectURL(blob)
           });

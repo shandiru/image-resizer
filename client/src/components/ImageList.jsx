@@ -3,8 +3,8 @@ import { FileImage, Trash2, CheckCircle, AlertCircle, Loader2 } from 'lucide-rea
 import { formatFileSize } from '../lib/imageProcessor';
 
 export default function ImageList({ files, onRemove, isProcessing }) {
-  const totalOriginal = files.reduce((sum, file) => sum + (file.originalSize || 0), 0);
   const completed = files.filter(file => file.status === 'done');
+  const totalOriginal = completed.reduce((sum, file) => sum + (file.originalSize || 0), 0);
   const totalOptimized = completed.reduce((sum, file) => sum + (file.optimizedSize || 0), 0);
   const savedPercent = totalOriginal ? Math.max(0, (1 - totalOptimized / totalOriginal) * 100) : 0;
   if (!files.length) return null;

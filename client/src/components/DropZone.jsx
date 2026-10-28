@@ -6,6 +6,10 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_FILES = 40;
 
 export default function DropZone({ files, setFiles, onProcessing }) {
+  const clearFiles = () => {
+    files.forEach(file => { if (file.preview) URL.revokeObjectURL(file.preview); });
+    setFiles([]);
+  };
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length === 0) return;
     const slots = Math.max(0, MAX_FILES - files.length);
@@ -60,7 +64,7 @@ export default function DropZone({ files, setFiles, onProcessing }) {
             <button {...getRootProps()} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-accent-800 hover:bg-accent-50 rounded-lg transition-colors">
               <Plus className="w-4 h-4" /> Add images
             </button>
-            <button onClick={() => setFiles([])} className="flex items-center gap-2 px-4 py-2 text-sm text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors">
+            <button onClick={clearFiles} disabled={onProcessing} className="flex items-center gap-2 px-4 py-2 text-sm text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors disabled:opacity-50">
               <X className="w-4 h-4" /> Clear all
             </button>
           </div>
